@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+		<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+		<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<title>Number of Commits</title>
+	</head>
+	<body>
+		<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+			<header class="mdl-layout__header">
+				<div class="mdl-layout__header-row" style="padding-left: 20px;">
+					<!-- Back arrow. -->
+					<button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+						<i class="material-icons md-48">chevron_left</i>
+					</button>
+					<!-- Title -->
+					<span class="mdl-layout-title">GitHub Inspector - Commits per Author</span>
+					<!-- Add spacer, to align navigation to the right -->
+					<div class="mdl-layout-spacer"></div>
+					<!-- Navigation. We hide it in small screens. -->
+					<nav class="mdl-navigation mdl-layout--large-screen-only"></nav>
+				</div>
+			</header>
+			<main class="mdl-layout__content">
+				<div class="page-content">
+					<form action="#">
+						<div class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:2%; height:5%;">
+							<h4>Enter a GitHub Repo URL below</h4>
+							<div class="mdl-textfield mdl-js-textfield">
+								<input class="mdl-textfield__input" type="text" id="repoURL">
+								<label class="mdl-textfield__label">GitHub URL</label>
+							</div>
+						</div>
+					</form>
+					<button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick=demoFunction() style="position:absolute; left:2%; top:20%; height:5%;">Analyse GitHub Repo</button>
+				</div>
+				<div id="statusOutput" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:25%; height:5%"></div>
+				<div id="bar-chart-container" style="position:absolute; left:2%; top:30%; height:65%">
+					<canvas id="bar-chart" style="position:absolute; left:10px; top:25px;"></canvas>
+				</div>
+			</main>
+		</div>
+		<script>
+			class Info {
+				constructor(url) { //calls api
+					url = "https://github.com/Parchive/par2cmdline";
+					this.baseIssueURL = url.replace("github.com/", "api.github.com/repos/");
+					this.baseIssueURL += "/commits";
+					this.authorStats = {};
+					this.chartObject = null;
+				}
+
+				getInfo() {
+					this.InfoHelper(this.baseIssueURL);
+				}
+
+				InfoHelper(url) {
+					var urlRequest = new XMLHttpRequest(); //java library function to get data
+					urlRequest.parent = this;
+					urlRequest.onreadystatechange = function() {
+						this.parent.processResponse(this);
+					};
+					urlRequest.open("GET", url, true);
+					urlRequest.send();
+				}
+
+				processResponse(urlRequest) {
+					if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+						var commit_data = JSON.parse(urlRequest.responseText);
+						this.processData(commit_data);
+
+						if (urlRequest.getResponseHeader("link") != null) {
+								var nextPageMatch = urlRequest.getResponseHeader("link").match(/<(.*?)>; rel="next"/);
+								if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch[1].includes("prev")) {
+									nextPageMatch = urlRequest.getResponseHeader("link").match(/, <(.*?)>; rel="next"/);
+								}
+								if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch != null) {
+									this.InfoHelper(nextPageMatch[1]);
+								} else {
+									this.displayData(1);
+								}
+						}
+					}
+				}
+
+				processData(data) {
+					for (var i = 0; i < data.length; i++) {
+						var authorName = data[i].commit.author.name; //["commit"]["author"]["name"];
+						if (authorName in this.authorStats) {
+							this.authorStats[authorName] += 1;
+						} else {
+							this.authorStats[authorName] = 1;
+						}
+					}
+					this.displayData(0);
+				}
+
+				displayData(final) {
+					if (final) {
+						document.getElementById("statusOutput").innerHTML = "<h4>Number of commits per developer:</h4>";
+					} else {
+						document.getElementById("statusOutput").innerHTML = "<h4>Retrieving data...</h4>";
+					}
+					if (Object.keys(this.authorStats).length == 0) {
+						document.getElementById("statusOutput").innerHTML = "<h4>No available commit data...</h4>";
+					} else if (this.chartObject == null && Object.keys(this.authorStats).length > 0) {
+						document.getElementById("bar-chart-container").style.width = '100%';
+						this.chartObject = new Chart(document.getElementById("bar-chart"), {
+								type: 'bar',
+								data: {
+									labels: Object.keys(this.authorStats),
+									datasets: [
+									{
+										label: "Commit count",
+										data: Object.values(this.authorStats)
+									}
+									]
+								},
+								options: {
+									legend: { display: false },
+									responsive: true,
+									title: {
+										display: true,
+										text: "Commits per developer"
+									}
+								}
+							});
+					} else {
+						this.chartObject.data.labels = Object.keys(this.authorStats);
+						this.chartObject.data.datasets[0].data = Object.values(this.authorStats);
+						this.chartObject.update();
+					}
+				}
+
+			}
+
+			function demoFunction() {
+				// "https://github.com/Parchive/par2cmdline"
+				var repoURL = document.getElementById("repoURL").value;
+				var testinfodata = new Info(repoURL, "/commits");
+				testinfodata.getInfo();
+			}
+		</script>
+	</body>
+</html>

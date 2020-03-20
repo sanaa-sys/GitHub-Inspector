@@ -1,0 +1,313 @@
+<html>
+	<head>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+		<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+		<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+	</head>
+	<body>
+		<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+			<header class="mdl-layout__header">
+				<div class="mdl-layout__header-row" style="padding-left: 20px;">
+					<!-- Back arrow. -->
+					<button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+						<i class="material-icons md-48">chevron_left</i>
+					</button>
+
+					<!-- Title -->
+					<span class="mdl-layout-title">GitHub Inspector - Commit Timeline</span>
+
+					<!-- Add spacer, to align navigation to the right -->
+					<div class="mdl-layout-spacer"></div>
+
+					<!-- Navigation. We hide it in small screens. -->
+					<nav class="mdl-navigation mdl-layout--large-screen-only"></nav>
+				</div>
+			</header>
+			<main class="mdl-layout__content">
+				<div class="page-content">
+					<form action="#">
+						<div class="mdl-cell mdl-cell--8-col" style="position:absolute; left:25px; top:30px;"><h4>Enter a GitHub Repo URL below<h4>
+							<div class="mdl-textfield mdl-js-textfield">
+								<input class="mdl-textfield__input" type="text" id="repoURL">
+								<label class="mdl-textfield__label" for="sample1">GitHub URL</label>
+							</div>
+						</div>
+					</form>
+
+					<button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick="createTimeline()"
+								style="position:absolute; left:30px; top:185px;">Analyse GitHub Repo</button>
+				</div>
+			
+				<!-- TIMELINE-->
+				<div id="app" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:25px; top:200px; width:90%;">
+					<div class="row">
+						<div class="col-md-12">
+							<div class="swiper-container" id="swiper-container-instance" hidden="true">
+								<p class="swiper-control">
+									<button type="button" class="btn btn-default btn-sm prev-slide">Prev</button>
+									<button type="button" class="btn btn-default btn-sm next-slide">Next</button>
+								</p>
+								<div class="swiper-wrapper timeline">
+									<div class="swiper-slide" v-for="item in steps">
+										<div class="timestamp">
+											<span class="date">{{item.title}}<span>
+										</div>
+										<div class="status">
+											<span>{{item.dateLabel}}</span>
+										</div>
+									</div>
+								</div>
+								<!-- Add Pagination -->
+								<div class="swiper-pagination"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div id="demoOutput" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:26px; top:230px;"></div>
+			</main>
+	</body>
+	<style>
+		body {
+			background: #e8eeff;
+		}
+		#app {
+			padding: 50px 0;
+		}
+		.timeline {
+			margin: 50px 0;
+			list-style-type: none;
+			display: flex;
+			padding: 0;
+			text-align: center;
+		}
+		.timeline li {
+			transition: all 200ms ease-in;
+		}
+		.timestamp {
+			width: 200px;
+			margin-bottom: 20px;
+			padding: 0px 40px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			font-weight: 100; 
+		}
+		.status {
+			padding: 0px 40px;
+			display: flex;
+			justify-content: center;
+			border-top: 4px solid #3e70ff;
+			position: relative;
+			transition: all 200ms ease-in ;
+		}
+
+		.status span {
+			font-weight: 600;
+			padding-top: 20px;
+		}
+		.status span:before {
+			content: '';
+			width: 25px;
+			height: 25px;
+			background-color: #e8eeff;
+			border-radius: 25px;
+			border: 4px solid #3e70ff;
+			position: absolute;
+			top: -15px;
+			left: 42%;
+			transition: all 200ms ease-in;
+		}
+		.swiper-control {
+			text-align: right;
+		}
+		.swiper-container {
+			width: 100%;
+			height: 250px;
+			margin: 50px 0;
+			overflow: hidden;
+			padding: 0 20px 30px 20px;
+		}
+		.swiper-slide {
+			width: 200px;
+			text-align: center;
+			font-size: 18px;
+		}
+		.swiper-slide:nth-child(2n) {
+			width: 40%;
+		}
+		.swiper-slide:nth-child(3n) {
+			width: 20%;
+		}
+	</style>
+</html>
+
+
+<!--JAVASCRIPT CODE.-->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Swiper/4.5.1/js/swiper.min.js" integrity="sha256-4sETKhh3aSyi6NRiA+qunPaTawqSMDQca/xLWu27Hg4=" crossorigin="anonymous"></script>
+<script>
+	class CommitsData {
+		constructor(url) {
+			this.baseUrl = url.replace("github.com/", "api.github.com/repos/");
+			this.baseUrl += "/commits";
+			this.authors = [];
+			this.commitDict = {};
+			this.rawData = {};
+			this.slider = null;
+			this.finalData = [];
+			this.timeAuthorList = [];
+            this.pageEnd = false;
+		}
+
+		// Calling the request function
+		getCommitsData() {
+			this.commitInfo(this.baseUrl);
+		}
+
+		// Making request to API
+		commitInfo(url) {
+			var urlRequest = new XMLHttpRequest();
+			urlRequest.parent = this;
+			urlRequest.onreadystatechange = function () {
+				this.parent.processResponse(this);
+			};
+			urlRequest.open("GET", url, true);
+			urlRequest.send();
+		}
+
+		// Processing the data from the API
+		processResponse(urlRequest) {
+			if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+				var issueData = JSON.parse(urlRequest.responseText);
+                //console.log(issueData);
+				this.processData(issueData);
+                var nextPageMatch = urlRequest.getResponseHeader("link").match(/<(.*?)>; rel="next"/);
+                if (nextPageMatch != null) {
+                    this.commitInfo(nextPageMatch[1]);
+                }
+                else{
+                    //Set up te timeline if no more pages
+                    this.dataFunction(this.commitDict);
+                }
+			}
+		}
+
+		// Organising the data into a dictionary
+		processData(data) {
+			var output = "<h4><b>Timeline</b></h4><br><br><br><br><br><br><br><br><br><br><br><br><br><h4><b>Average time between commits for each user</b></h4>";
+			// This loop adds all authors in the authors list and as keys in dictionary
+			for (var i = 0; i < data.length; i++) {
+				if (!this.authors.includes(data[i]["commit"]["author"]["name"])) {
+					this.authors.push(data[i]["commit"]["author"]["name"]);
+					this.commitDict[data[i]["commit"]["author"]["name"]] = [];
+					this.rawData[data[i]["commit"]["author"]["name"]] = [];
+				}
+                var date = new Date(data[i]["commit"]["author"]["date"]).
+                toLocaleString('en-AU');
+				this.timeAuthorList.push({title: data[i]["commit"]["author"]["name"], dateLabel: date});
+			}
+
+			// Adding the time/dates to the dictionary
+			for (var i = 0; i < data.length; i++) {
+				for (var j = 0; j < data.length; j++) {
+					if (data[i]["commit"]["author"]["name"] == this.authors[j]) {
+						// Adding the date/time as a value in the dictionary
+						var date = data[i]["commit"]["author"]["date"];
+						this.rawData[this.authors[j]].push(date);
+						date = date.split('T').join(' ');
+						date = date.split('Z').join(' ');
+						this.commitDict[this.authors[j]].push(date);
+					}
+				}
+			}
+			
+
+			// Calculating the average time between commits for each author
+			for (var i = 0; i < this.authors.length; i++) {
+				// Assigning the dates variables the dates array from dictionary
+				var totalSeconds = 0;
+				var avgSec = 0;
+				var avgTime = 0;
+				var dates = this.rawData[this.authors[i]];
+				dates.reverse();
+
+				// Iterating through dates and calculating time differences
+				for (var j = 0; j < dates.length - 1; j++) {
+					var start = dates[j];
+					var end = dates[j + 1];
+					var fromTime = new Date(start);
+					var endTime = new Date(end);
+					var timeDiff = endTime.getTime() - fromTime.getTime();
+					var seconds = Math.floor((timeDiff) / (1000));
+					totalSeconds += seconds;
+				}
+
+				// Calculating average seconds and adding it to output
+				avgSec = Math.floor((totalSeconds) / (dates.length));
+				avgTime = new Date(avgSec * 1000).toISOString().substr(11, 8);
+                if(avgTime === "00:00:00"){
+                    //If avgTimeis 0, display the following string
+                    avgTime = "Only 1 commit made"
+                    output += "<h5><b>User</b> '" + this.authors[i] + "': " + avgTime  + "</h4>";
+                }
+                else{
+                    // Split the time into hrs, mins and sec to display the units
+                    var array = avgTime.split(':'),
+                        a = array[0], b = array[1], c = array[2];
+                    output += "<h5><b>User</b> '" + this.authors[i] + "': " + array[0] + " hrs " +
+                        array[1] + " mins " + array[2] + " secs "+ "</h4>";
+                }
+				
+				document.getElementById("demoOutput").innerHTML = output;
+			}
+		}
+
+		dataFunction(dataTimeLine) {
+			console.log(dataTimeLine);
+			for (var key in dataTimeLine) {
+				var value = dataTimeLine[key];
+				for (var i = 0; i < value.length; i++) {
+					this.finalData.push({dateLabel: key, title: value[i]});
+				}
+			}
+			this.createSlider();
+		}
+
+		createSlider() {
+			// For the timeline funtionality
+			this.slider = new Vue({
+					el: "#app",
+					data: {
+						steps: this.timeAuthorList.reverse()
+					},
+					loop: true,
+					mounted() {
+						document.getElementById("swiper-container-instance").hidden = false;
+						this.swiper = new Swiper(".swiper-container", {
+								slidesPerView: 'auto',
+								spaceBetween: 0,
+								pagination: {
+									el: ".swiper-pagination",
+									clickable: true
+								},
+								navigation: {
+									nextEl: ".next-slide",
+									prevEl: ".prev-slide"
+								}
+						});
+					}
+			});
+			
+		}
+
+	}
+
+	function createTimeline() {
+		// "https://github.com/Parchive/par2cmdline"
+		var repoURL = document.getElementById("repoURL").value
+		document.getElementById("demoOutput").innerHTML = "";
+		testCommitsData = new CommitsData(repoURL);
+		testCommitsData.getCommitsData();
+	}
+</script>

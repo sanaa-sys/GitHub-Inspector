@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+		<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+		<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<title>GitHub Commit Size Analysis</title>
+	</head>
+	<body>
+		<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+			<header class="mdl-layout__header">
+				<div class="mdl-layout__header-row" style="padding-left: 20px;">
+					<!-- Back arrow. -->
+					<button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+						<i class="material-icons md-48">chevron_left</i>
+					</button>
+					<!-- Title -->
+					<span class="mdl-layout-title">GitHub Inspector - Commit Size Analysis</span>
+						<!-- Add spacer, to align navigation to the right -->
+					<div class="mdl-layout-spacer"></div>
+					<!-- Navigation. We hide it in small screens. -->
+					<nav class="mdl-navigation mdl-layout--large-screen-only"></nav>
+				</div>
+			</header>
+			<main class="mdl-layout__content">
+				<div class="page-content">
+					<form action="#">
+						<div class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:2%; height:5%;">
+							<h4>Enter a GitHub Repo URL below</h4>
+							<div class="mdl-textfield mdl-js-textfield">
+								<input class="mdl-textfield__input" type="text" id="repoURL">
+								<label class="mdl-textfield__label">GitHub URL</label>
+							</div>
+						</div>
+					</form>
+					<button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick="userClickFunction()" style="position:absolute; left:2%; top:20%; height:5%;">Analyse GitHub Repo</button>
+				</div>
+				<div id="statusOutput" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:25%; height:5%"></div>
+				<div id="bar-chart-container" style="position:absolute; left:2%; top:30%; height:65%">
+					<canvas id="bar-chart" style="position:absolute; left:10px; top:25px;"></canvas>
+				</div>
+			</main>
+		</div>
+		<script>
+			class IssueCloserData {
+				constructor(url) {
+					this.statsURL = url.replace("github.com/", "api.github.com/repos/")
+					this.statsURL += "/stats/contributors"
+					this.devStats = {};
+					this.retryCount = 0;
+				}
+
+				getIssueCloserCount() {
+					this.issueCloserCountHelper(this.statsURL);
+				}
+
+				issueCloserCountHelper(url) {
+					//console.log("Hit issueCloserCountHelper: " + url);
+					var urlRequest = new XMLHttpRequest();
+					urlRequest.parent = this;
+					urlRequest.onreadystatechange = function () {
+						this.parent.processResponse(this);
+					};
+					urlRequest.open("GET", url, true);
+					urlRequest.send();
+				}
+
+				processResponse(urlRequest) {
+					if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+						var parsedData = JSON.parse(urlRequest.responseText);
+						this.processStatsData(parsedData);
+					// No pagination for stats data - possibly a HTTP 202 status for uncached data though (retry after a few seconds)
+					} else if (urlRequest.readyState == 4 && urlRequest.status == 202 && this.retryCount < 4) {
+						this.retryCount += 1;
+						document.getElementById("statusOutput").innerHTML = "<b>Uncached data request from GitHub. Retrying... (" + this.retryCount + " of 3)</b>";
+						this.getIssueCloserCount();
+					} else if (urlRequest.readyState == 4){
+						document.getElementById("statusOutput").innerHTML = "<b>Error retrieving data from GitHub</b>";
+					}
+				}
+
+				processStatsData(data) {
+					//console.log(data);
+					for (var i = 0; i < data.length; i++) {
+						// Each author appears only once in the returned data
+						var loginName = data[i].author.login;
+						this.devStats[loginName] = {};
+						this.devStats[loginName]["a"] = 0;
+						this.devStats[loginName]["d"] = 0;
+						this.devStats[loginName]["c"] = 0;
+						var weekData = data[i].weeks;
+						for (var weekNum = 0; weekNum < weekData.length; weekNum++) {
+							this.devStats[loginName]["a"] += weekData[weekNum]["a"];
+							this.devStats[loginName]["d"] += weekData[weekNum]["d"];
+							this.devStats[loginName]["c"] += weekData[weekNum]["c"];
+						}
+						//console.log("Developer stats: Added: " + this.devStats[loginName]["a"] + ", Deleted: " + this.devStats[loginName]["d"] + ", Commits: " + this.devStats[loginName]["c"]);
+					}
+					if (Object.keys(this.devStats).length == 0) {
+						document.getElementById("statusOutput").innerHTML = "<h4>No commit data exists for the given repository</h4>";
+					} else {
+						this.displayData();
+					}
+				}
+
+				displayData() {
+					document.getElementById("statusOutput").innerHTML = "<h4>Average Commit Size Chart:</h4>";
+					this.additionsList = [];
+					this.deletionsList = [];
+					for (var dev in this.devStats) {
+						this.additionsList.push((this.devStats[dev]["a"] / this.devStats[dev]["c"]).toFixed(2));
+						this.deletionsList.push((-this.devStats[dev]["d"] / this.devStats[dev]["c"]).toFixed(2));
+					}
+					this.chartObject = new Chart(document.getElementById("bar-chart"), {
+						type: 'bar',
+						data: {
+							labels: Object.keys(this.devStats),
+							datasets: [
+							{
+								label: "Average Lines Added Per Commit",
+								backgroundColor: 'rgb(0, 0, 255, 1)',
+								data: this.additionsList
+							},
+							{
+								label: "Average Lines Deleted Per Commit",
+								backgroundColor: 'rgb(255, 0, 0, 1)',
+								data: this.deletionsList
+							}
+							]
+						},
+						options: {
+							legend: { display: true },
+							responsive: true,
+							title: {
+								display: true,
+								text: 'Average Commit Size for Each Developer'
+							},
+							tooltips: {
+								mode: 'index',
+								intersect: true
+							},
+							scales: {
+								xAxes: [{ stacked: true }],
+								yAxes: [{ stacked: true }]
+							}
+						}
+					});
+					document.getElementById("bar-chart-container").style.width = '95%';
+				}
+			}
+
+			function userClickFunction() {
+				// "https://github.com/Parchive/par2cmdline"
+				var repoURL = document.getElementById("repoURL").value
+				document.getElementById("statusOutput").innerHTML = "";
+				testIssueCloserData = new IssueCloserData(repoURL);
+				testIssueCloserData.getIssueCloserCount();
+			}
+		</script>
+	</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+		<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+		<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<title>GitHub Inspector - Average Resolution Time</title>
+	</head>
+	<body>
+		<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+			<header class="mdl-layout__header">
+				<div class="mdl-layout__header-row" style="padding-left: 20px;">
+					<!-- Back arrow. -->
+					<button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+						<i class="material-icons md-48">chevron_left</i>
+					</button>
+					<!-- Title -->
+					<span class="mdl-layout-title">GitHub Inspector - Average Resolution Time</span>
+						<!-- Add spacer, to align navigation to the right -->
+					<div class="mdl-layout-spacer"></div>
+					<!-- Navigation. We hide it in small screens. -->
+					<nav class="mdl-navigation mdl-layout--large-screen-only"></nav>
+				</div>
+			</header>
+			<main class="mdl-layout__content">
+				<div class="page-content">
+					<form action="#">
+						<div class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:2%; height:5%;">
+							<h4>Enter a GitHub Repo URL below</h4>
+							<div class="mdl-textfield mdl-js-textfield">
+								<input class="mdl-textfield__input" type="text" id="repoURL">
+								<label class="mdl-textfield__label">GitHub URL</label>
+							</div>
+						</div>
+					</form>
+					<button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick="userClickFunction()" style="position:absolute; left:2%; top:20%; height:5%;">Analyse GitHub Repo</button>
+				</div>
+				<div id="statusOutput" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:25%; height:5%"></div>
+				<div id="bar-chart-container" style="position:absolute; left:2%; top:30%; height:65%">
+					<canvas id="bar-chart" style="position:absolute; left:10px; top:25px;"></canvas>
+				</div>
+			</main>
+		</div>
+		<script>
+			class RepoIssueData {
+				constructor(url) {
+					this.baseIssueURL = url.replace("github.com/", "api.github.com/repos/");
+					this.baseIssueURL += "/issues?filter=all&state=closed&per_page=100";
+					this.timeSum = 0;
+					this.issueCount = 0;
+				}
+
+				getIssueAverageTime() {
+					this.issueAverageTimeHelper(this.baseIssueURL);
+				}
+
+				issueAverageTimeHelper(url) {
+					var urlRequest = new XMLHttpRequest();
+					urlRequest.parent = this;
+					urlRequest.onreadystatechange = function () {
+						this.parent.processResponse(this);
+					};
+					urlRequest.open("GET", url, true);
+					urlRequest.send();
+				}
+
+				processResponse(urlRequest) {
+					if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+						//console.log("All response headers: " + urlRequest.getAllResponseHeaders());
+						var issueData = JSON.parse(urlRequest.responseText);
+						this.processIssueData(issueData);
+						if (urlRequest.getResponseHeader("link") != null) {
+							var nextPageMatch = urlRequest.getResponseHeader("link").match(/<(.*?)>; rel="next"/);
+							if (nextPageMatch != null) {
+								//console.log("rel->next: " + nextPageMatch[1]);
+								this.issueAverageTimeHelper(nextPageMatch[1]);
+							} else {
+								this.displayFinalOutput();
+							}
+						} else {
+							this.displayFinalOutput();
+						}
+					}
+				}
+
+				displayFinalOutput() {
+					if (this.issueCount > 0) {
+						var output = document.getElementById("statusOutput").innerHTML;
+						console.log("Total average time (seconds): " + Math.floor(this.timeSum / this.issueCount));
+						console.log("Total average issue resolution time: " + timeFormat(Math.floor(this.timeSum / this.issueCount)));
+						output = "<b>Total average issue resolution time: " + timeFormat(Math.floor(this.timeSum / this.issueCount)) + "</b><br><br>" + output;
+						document.getElementById("statusOutput").innerHTML = output;
+					} else {
+						document.getElementById("statusOutput").innerHTML = "<b>No issues exist for the provided repo</b>";
+					}
+				}
+
+				processIssueData(data) {
+					//console.log(data);
+					var output = document.getElementById("statusOutput").innerHTML;
+					for (var i = 0; i < data.length; i++) {
+						if (data[i].pull_request == null) {
+							var resolutionTime = (Date.parse(data[i].closed_at) - Date.parse(data[i].created_at))/1000;
+							output += 'Issue: ' + '<a href="' + data[i].html_url + '">' + data[i].title + "</a><pre>    Resolution time (" + resolutionTime + " seconds): " + timeFormat(resolutionTime) + "</pre>";
+							this.timeSum += resolutionTime;
+							this.issueCount += 1;
+						}// else {
+						//	output += 'Pull request: ' + '<a href="' + data[i].html_url + '">' + data[i].title + '</a><br>';
+						//}
+					}
+					//console.log("Average time: " + Math.floor(this.timeSum / this.issueCount));
+					document.getElementById("statusOutput").innerHTML = output;
+				}
+			}
+
+			function timeFormat(inputTime) {
+				var weeks = Math.floor(((inputTime / 3600) / 24) / 7);
+				var days = Math.floor((inputTime / 3600) / 24 % 7);
+				var hours = Math.floor(inputTime / 3600 % 24);
+				var minutes = Math.floor(inputTime / 60 % 60);
+				var seconds = Math.floor(inputTime % 60);
+				var output = "";
+				if (weeks > 1) {
+					output += weeks + " weeks ";
+				} else if (weeks == 1) {
+					output += weeks + " week ";
+				}
+				if (days > 1) {
+					output += days + " days ";
+				} else if (days == 1) {
+					output += days + " day ";
+				}
+				if (hours > 1) {
+					output += hours + " hours ";
+				} else if (hours == 1) {
+					output += hours + " hour ";
+				}
+				if (minutes > 1) {
+					output += minutes + " minutes ";
+				} else if (minutes == 1) {
+					output += minutes + " minute ";
+				}
+				if (seconds > 1) {
+					output += seconds + " seconds";
+				} else if (seconds == 1) {
+					output += seconds + " second";
+				}
+				return output;
+			}
+
+			function userClickFunction() {
+				// "https://github.com/Parchive/par2cmdline"
+				var repoURL = document.getElementById("repoURL").value;
+				document.getElementById("statusOutput").innerHTML = "";
+				var testRepoIssueData = new RepoIssueData(repoURL);
+				testRepoIssueData.getIssueAverageTime();
+			}
+
+		</script>
+	</body>
+</html>

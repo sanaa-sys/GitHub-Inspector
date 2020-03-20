@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <title>Pie Chart</title>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+        <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+        <!-- Plotly.js -->
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <!-- Numeric JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
+    </head>
+    <body>
+        <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+            <header class="mdl-layout__header">
+                <div class="mdl-layout__header-row" style="padding-left: 20px;">
+                    <!-- Back arrow. -->
+                    <button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+                        <i class="material-icons md-48">chevron_left</i>
+                    </button>
+                    <!-- Title -->
+                    <span class="mdl-layout-title">Number of lines per person</span>
+                    <!-- Add spacer, to align navigation to the right -->
+                    <div class="mdl-layout-spacer">
+                    </div>
+                    <!-- Navigation. We hide it in small screens. -->
+                    <nav class="mdl-navigation mdl-layout--large-screen-only">
+                    </nav>
+                </div>
+            </header>
+            <main class="mdl-layout__content">
+                <div class="page-content">
+                    <form action="#">
+                        <button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+                            <i class="material-icons md-48">chevron_left</i>
+                        </button>
+                        <div class="mdl-cell mdl-cell--4-col"><h4>Enter URL to access statisticss<h4>
+                            <div class="mdl-textfield mdl-js-textfield">
+                                <input class="mdl-textfield__input" type="text" id="repoURL">
+                                <label class="mdl-textfield__label" for="sample1">Enter URL</label>
+                            </div>
+                            </form>
+                            <button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick="demoFunction()">Process GitHub Repo</button>
+                            </div>
+                        </div>
+                        <meta http-equiv="content-type" content="text/html; charset=UTF-8"></head></body><div id="demoOutput" class="mdl-cell mdl-cell--4-col"></div>
+            </main></div>
+        <div class="mdl-cell mdl-cell--8-col">
+            <canvas id="pie-chart" width="800" height="450"></canvas>
+        </div>
+    </body>
+</html>
+<div id="myDiv"><!-- Plotly chart will be drawn inside this DIV --></div>
+<script>
+    var author_Print;
+    var output;
+    var additionsArray = [];
+    var percentageList = [];
+    class Info {
+        constructor(url) {
+            //url =  "https://github.com/Parchive/par2cmdline";
+            this.baseIssueURL = url.replace("github.com/", "api.github.com/repos/");
+            this.baseIssueURL += "/commits";
+            this.authors = [];
+            this.commitId = [];
+            this.additions = [];
+            this.deletions= [];
+            this.total_commits =[];
+            this.dict = {}
+        }
+        getInfo() {
+            this.InfoHelper(this.baseIssueURL);
+        }
+        InfoHelper(url) {
+            var urlRequest = new XMLHttpRequest();//java library function to get data
+            urlRequest.parent = this;
+            urlRequest.onreadystatechange = function () {
+                this.parent.processResponse(this);
+                //	console.log(url)
+            };
+            urlRequest.open("GET", url, true);
+            urlRequest.send();
+        }
+        //will have to parse additions and deletions
+
+        processResponse(urlRequest) {
+            if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+                var commit_data = JSON.parse(urlRequest.responseText);
+                this.processData(commit_data);
+
+                if (urlRequest.getResponseHeader("link") != null) {
+                    var nextPageMatch = urlRequest.getResponseHeader("link").match(/<(.*?)>; rel="next"/);
+                    if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch[1].includes("prev")) {
+                        nextPageMatch = urlRequest.getResponseHeader("link").match(/, <(.*?)>; rel="next"/);
+                    }
+                    if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch != null) {
+                        this.InfoHelper(nextPageMatch[1]);
+                    } else {
+                        this.displayData(1);
+                    }
+                }
+            }
+        }
+        processData(data) {
+            //console.log(data);
+            var output = "";
+            for (var i = 0; i < data.length; i++) {
+                //	console.log(1)
+                if (!(this.authors.includes(data[i]["commit"]["author"]["name"]))) {
+                    this.authors.push(data[i]["commit"]["author"]["name"]);
+                    this.dict[data[i]["commit"]["author"]["name"]] = 0;
+                    this.commitId.push(data[i]["sha"]);
+                    //console.log(data);
+                }
+            }
+            this.processSha(this.baseIssueURL);
+            author_Print = this.authors;
+            //	console.log(author_Print);
+            //console.log(this.total_commits);
+            for (var i = 0; i < this.authors.length; i++){
+                output += "<br>" + this.authors[i] + "</br>";
+                //can print here for additions, deletions and commits
+            }
+            document.getElementById("demoOutput").innerHTML =  "Authors:" +"<br>" + output;
+        }
+        processSha(url){
+            //let array =[]
+            for(let i =0; i < this.commitId.length; i++){
+                let urlRequest = new XMLHttpRequest();//java library function to get data
+                let printing = "/" + this.commitId[i];
+                url+= printing;
+                urlRequest.parent = this;
+                urlRequest.onreadystatechange = function (array) {
+                    // this.parent.processResponse(this);
+                    this.parent.additionfunction(this.responseText);
+                    //this.total_commits.push();
+                };
+                urlRequest.open("GET", url, true);
+                urlRequest.send();
+                //console.log(url)
+                url = this.baseIssueURL;
+            }
+        }
+        additionfunction(data){
+            let myobj = JSON.parse(data);
+            //console.log(myobj);
+            this.total_commits.push(myobj);
+            //console.log(this.total_commits);
+            //console.log(myobj["stats"]);
+            //output+= myobj["stats"]["additions"];
+            var additions = myobj["stats"]["additions"];
+            console.log(additions);
+            var name = myobj["commit"]["author"]["name"];
+            console.log(name)
+
+            for(var key in this.dict){
+                if(key === name){
+                    this.dict[key] += additions;
+                }
+            }
+            //additionsArray.push(myobj["stats"]["additions"]);
+            //console.log(additionsArray);
+            //console.log(this.authors);
+            console.log(this.dict);
+            //console.log(list)
+            //output+= "</br>"
+            document.getElementById("demoOutput").innerHTML =  "additions:" +"<br>" + output;
+
+            // Calculating total number of additons
+            var totalLines = 0;
+            var percentageLines = 0;
+            for(var key in this.dict){
+                totalLines += this.dict[key];
+            }
+
+            // Calculating percentage for each author
+            var i = 0;
+            var limit = this.authors.length;
+            for(var key in this.dict){
+                var lines = this.dict[key];
+                percentageLines = Math.round((lines / totalLines) * 100);
+                percentageList[i] = percentageLines;
+                i++;
+            }
+            console.log(percentageList);
+
+
+            this.chart();
+        }
+        chart(){
+            //	console.log(author_Print)
+            var data = [{
+                values:  percentageList,
+                labels: this.authors, //['Student 1', 'Student 2', 'Student 3', 'student 4', 'student 5'],
+                type: 'pie'}];
+            Plotly.newPlot('myDiv', data, {}, {showSendToCloud:true});
+        }
+    }
+    function demoFunction() {
+        // "https://github.com/Parchive/par2cmdline"
+        var repoURL = document.getElementById("repoURL").value
+        document.getElementById("demoOutput").innerHTML = "";
+        testinfodata = new Info(repoURL,"/commits");
+        testinfodata.getInfo();
+    }
+</script>
+</body>

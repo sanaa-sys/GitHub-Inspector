@@ -1,0 +1,59 @@
+<head>
+  <body>
+    <script>
+
+
+class Info{
+  var url = "https://api.github.com/repos/Parchive/par2cmdline/commits"
+  request(url){
+    var urlRequest = new XMLHttpRequest();
+    urlRequest.parent = this;
+    urlRequest.onreadystatechange = function () {
+        this.parent.processResponse(this);
+      };
+      urlRequest.open("GET", url, true);
+      urlRequest.send();
+    }
+    processResponse(urlRequest){
+      if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+          //console.log("All response headers: " + urlRequest.getAllResponseHeaders());
+          var issueData = JSON.parse(urlRequest.responseText);
+          this.processIssueData(issueData);
+      if (nextPageMatch != null) {
+          //console.log("rel->next: " + nextPageMatch[1]);
+          this.issueAverageTimeHelper(nextPageMatch[1]);
+      } else {
+
+    }
+
+///// python code:
+// demo_commit_url = "https://api.github.com/repos/Parchive/par2cmdline/commits"
+//
+// r = requests.get(demo_commit_url)
+// commit_data = json.loads(r.content)
+// print(r.content)
+// author_Data = {}
+// bail = 20
+// for item in commit_data:
+//     #print(item["commit"]["author"]["name"])
+//     print(item["url"])
+//     if bail > 0:
+//         bail -= 1
+//     else:
+//         break
+//     sub_request = requests.get(item["url"])
+//     specific_data = json.loads(sub_request.content)
+//     additions = specific_data["stats"]["additions"]
+//     deletions = specific_data["stats"]["deletions"]
+//     print("Author: {0}, lines added: {1}, lines deleted: {2}".format(item["commit"]["author"]["name"], additions, deletions))
+//
+//     if item["commit"]["author"]["name"] in author_Data:
+//         author_Data[item["commit"]["author"]["name"]] += 1
+//     else:
+//         author_Data[item["commit"]["author"]["name"]] = 1
+//
+// print(author_Data)
+/////
+    </script>
+  </body>
+</head>

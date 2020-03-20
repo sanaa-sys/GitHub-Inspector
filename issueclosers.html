@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+		<link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+		<script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<title>GitHub Issue Resolution Analysis</title>
+	</head>
+	<body>
+		<div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+			<header class="mdl-layout__header">
+				<div class="mdl-layout__header-row" style="padding-left: 20px;">
+					<!-- Back arrow. -->
+					<button class="mdl-layout-icon mdl-button mdl-js-button mdl-button--icon" OnClick="window.location.href='index.html'">
+						<i class="material-icons md-48">chevron_left</i>
+					</button>
+					<!-- Title -->
+					<span class="mdl-layout-title">GitHub Inspector - Issue Resolution Count</span>
+						<!-- Add spacer, to align navigation to the right -->
+					<div class="mdl-layout-spacer"></div>
+					<!-- Navigation. We hide it in small screens. -->
+					<nav class="mdl-navigation mdl-layout--large-screen-only"></nav>
+				</div>
+			</header>
+			<main class="mdl-layout__content">
+				<div class="page-content">
+					<form action="#">
+						<div class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:2%; height:5%;">
+							<h4>Enter a GitHub Repo URL below</h4>
+							<div class="mdl-textfield mdl-js-textfield">
+								<input class="mdl-textfield__input" type="text" id="repoURL">
+								<label class="mdl-textfield__label">GitHub URL</label>
+							</div>
+						</div>
+					</form>
+					<button class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" onclick="userClickFunction()" style="position:absolute; left:2%; top:20%; height:5%;">Analyse GitHub Repo</button>
+				</div>
+				<div id="statusOutput" class="mdl-cell mdl-cell--8-col" style="position:absolute; left:2%; top:25%; height:5%"></div>
+				<div id="bar-chart-container" style="position:absolute; left:2%; top:30%; height:65%">
+					<canvas id="bar-chart" style="position:absolute; left:10px; top:25px;"></canvas>
+				</div>
+			</main>
+		</div>
+		<script>
+			class IssueCloserData {
+				constructor(url) {
+					this.eventURL = url.replace("github.com/", "api.github.com/repos/")
+					this.eventURL += "/issues/events"
+					this.issueClosers = {};
+					this.chartObject = null;
+					this.devColours = [];
+				}
+
+				getIssueCloserCount() {
+					this.issueCloserCountHelper(this.eventURL);
+				}
+
+				issueCloserCountHelper(url) {
+					//console.log("Hit issueCloserCountHelper: " + url);
+					var urlRequest = new XMLHttpRequest();
+					urlRequest.parent = this;
+					urlRequest.onreadystatechange = function () {
+						this.parent.processResponse(this);
+					};
+					urlRequest.open("GET", url, true);
+					urlRequest.send();
+				}
+
+				processResponse(urlRequest) {
+					if (urlRequest.readyState == 4 && urlRequest.status == 200) {
+						var parsedData = JSON.parse(urlRequest.responseText);
+						this.processEventData(parsedData);
+						//console.log(urlRequest.getResponseHeader("link"));
+						//console.log(urlRequest.getAllResponseHeaders());
+						if (urlRequest.getResponseHeader("link") != null) {
+							var nextPageMatch = urlRequest.getResponseHeader("link").match(/<(.*?)>; rel="next"/);
+							if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch[1].includes("prev")) {
+								nextPageMatch = urlRequest.getResponseHeader("link").match(/, <(.*?)>; rel="next"/);
+							}
+							//console.log("nextPageMatch is " + nextPageMatch[1]);
+							if (nextPageMatch != null && nextPageMatch.length > 1 && nextPageMatch != null) {
+								//console.log("rel->next: " + nextPageMatch[1]);
+								this.issueCloserCountHelper(nextPageMatch[1]);
+							} else {
+								//console.log("Finished reading event data");
+								//console.log(this.issueClosers);
+								//if (this.issueClosers.length > 1) {
+									this.displayData(1);
+								//}
+							}
+						}
+					} else if (urlRequest.readyState == 4 && urlRequest.status != 200) {
+						document.getElementById("statusOutput").innerHTML = "<b>Error retrieving data from GitHub</b>";
+					}
+				}
+
+				processEventData(data) {
+					//console.log(data);
+					for (var i = 0; i < data.length; i++) {
+						if (data[i].event == "closed" && !("pull_request" in data[i].issue)) {
+							var loginName = data[i].actor.login;
+							if (loginName in this.issueClosers) {
+								this.issueClosers[loginName] += 1;
+							} else {
+								this.issueClosers[loginName] = 1;
+							}
+						}
+					}
+					//console.log(this.issueClosers);
+					//if (this.issueClosers.length > 1) {
+						this.displayData(0);
+					//}
+				}
+
+				displayData(final) {
+					if (Object.keys(this.issueClosers).length == 0) {
+						document.getElementById("statusOutput").innerHTML = "<h4>No available issue data</h4>";
+						return;
+					}
+					if (final == 0) {
+						document.getElementById("statusOutput").innerHTML = "<h4>Generating chart...</h4>";
+					} else {
+						document.getElementById("statusOutput").innerHTML = "<h4>Final Issue Resolution Chart:</h4>";
+					}
+					this.devColours = [];
+					var devList = Object.keys(this.issueClosers);
+					if (devList.length != this.devColours.length) {
+						this.devColours = [];
+						for (var i = 0; i < devList.length; i++) {
+							var name = devList[i];
+							var temp = 0xffff;
+							for (var j = 0; j < name.length; j++) {
+								temp *= ((j+1)*name.charCodeAt(j));
+							}
+							this.devColours.push(temp % 0xfffff);
+						}
+					}
+					if (this.chartObject == null && Object.keys(this.issueClosers).length > 0) {
+						this.chartObject = new Chart(document.getElementById("bar-chart"), {
+							type: 'bar',
+							data: {
+								labels: Object.keys(this.issueClosers),
+								datasets: [
+								{
+									label: "Issues resolved",
+									//backgroundColor: ["#3e95cd", "#8e5ea2","#3cba9f","#e8c3b9","#c45850"],
+									backgroundColor: this.devColours,
+									data: Object.values(this.issueClosers)
+								}
+								]
+							},
+							options: {
+								legend: { display: false },
+								responsive: true,
+								title: {
+									display: true,
+									text: 'Issues Closed by Each Developer'
+								}
+							}
+						});
+					} else if (this.chartObject != null){
+						this.chartObject.data.labels = Object.keys(this.issueClosers);
+						this.chartObject.data.datasets[0].data = Object.values(this.issueClosers);
+						this.chartObject.data.datasets[0].backgroundColor = this.devColours;
+						this.chartObject.update();
+					}
+					console.log("There are " + devList.length + " developers and " + this.devColours.length + " dev colour values");
+					console.log("this.devColours is " + this.devColours);
+					document.getElementById("bar-chart-container").style.width = '95%';
+				}
+			}
+
+			function userClickFunction() {
+				// "https://github.com/Parchive/par2cmdline"
+				var repoURL = document.getElementById("repoURL").value
+				document.getElementById("statusOutput").innerHTML = "";
+				testIssueCloserData = new IssueCloserData(repoURL);
+				testIssueCloserData.getIssueCloserCount();
+			}
+		</script>
+	</body>
+</html>
