@@ -1,7 +1,5 @@
 # GitHub-Inspector
-It was a team project facilated with Scrum practices. We had to make a web app which helps tutors mark team projects done in GitHub.It 
-involved presenting statistics of the repository for repository owners, like a timeline showing when work was checked in, pie charts
-showing the proportion of lines of code each contributor checked in, and a list showing which team members were responsible for which files.
+It was a team project facilated with Scrum practices as a part of FIT2101- Software engineering process and management. We had to make a web app which helps tutors mark team projects done in GitHub.It involved presenting statistics of the repository for repository owners, like a timeline showing when work was checked in, pie charts showing the proportion of lines of code each contributor checked in, and a list showing which team members were responsible for which files.
 
 
 Here are the following user stories which we implemented:
